@@ -63,7 +63,7 @@
     .account-card { background: white; border-radius: 10px; margin-bottom: 14px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
     .account-header { padding: 12px 16px; display: flex; justify-content: space-between; align-items: center; }
     .account-row { padding: 9px 16px; display: flex; align-items: center; border-top: 1px solid #f3f4f6; font-size: 13px; }
-    .account-row .sym { font-weight: 700; width: 52px; }
+    .account-row .sym { font-weight: 700; width: 72px; flex-shrink: 0; }
     .account-row .desc { color: #6b7280; flex: 1; font-size: 11px; }
     .account-row .qty { color: #6b7280; font-size: 11px; width: 62px; text-align: right; }
     .account-row .val { font-weight: 600; width: 84px; text-align: right; }
@@ -976,7 +976,7 @@ function buildAccountCards(){
       rows+=`<div class="account-row"><div class="sym" style="color:${metaFor(h.sym).color}">${h.sym}</div><div class="desc">${metaFor(h.sym).name}</div><div class="qty">${fmtShares(h.qty)} sh</div><div class="val">${fmt(h.value)}</div><div class="chg ${p?'pos':'neg'}">${chg}</div></div>`;
     });
     const card=document.createElement('div'); card.className='account-card'; card.style.border=`1px solid ${colors.light}`;
-    card.innerHTML=`<div class="account-header" style="background:${colors.bg};"><div><div style="font-size:10px;font-weight:600;color:${colors.header};text-transform:uppercase;letter-spacing:.4px;margin-bottom:3px;">${name}</div><div style="font-size:18px;font-weight:800;">${fmt(data.total)}</div></div><div style="text-align:right;"><div style="font-size:11px;color:#9ca3af;">Today</div><div style="font-size:15px;font-weight:700;color:${pos?'#15803d':'#dc2626'}">${pos?'+':''}${fmt(data.dayGain)}</div></div></div><div style="display:flex;padding:6px 16px 4px;border-top:1px solid ${colors.light};font-size:10px;color:#9ca3af;font-weight:600;text-transform:uppercase;letter-spacing:.4px;"><div style="width:52px;">Symbol</div><div style="flex:1;">Name</div><div style="width:62px;text-align:right;">Shares</div><div style="width:84px;text-align:right;">Value</div><div style="width:60px;text-align:right;">Today</div></div>${rows}`;
+    card.innerHTML=`<div class="account-header" style="background:${colors.bg};"><div><div style="font-size:10px;font-weight:600;color:${colors.header};text-transform:uppercase;letter-spacing:.4px;margin-bottom:3px;">${name}</div><div style="font-size:18px;font-weight:800;">${fmt(data.total)}</div></div><div style="text-align:right;"><div style="font-size:11px;color:#9ca3af;">Today</div><div style="font-size:15px;font-weight:700;color:${pos?'#15803d':'#dc2626'}">${pos?'+':''}${fmt(data.dayGain)}</div></div></div><div style="display:flex;padding:6px 16px 4px;border-top:1px solid ${colors.light};font-size:10px;color:#9ca3af;font-weight:600;text-transform:uppercase;letter-spacing:.4px;"><div style="width:72px;">Symbol</div><div style="flex:1;">Name</div><div style="width:62px;text-align:right;">Shares</div><div style="width:84px;text-align:right;">Value</div><div style="width:60px;text-align:right;">Today</div></div>${rows}`;
     el.appendChild(card);
   }
 }
