@@ -33,6 +33,9 @@
     .status-pill.local { background: #64748b; color: #fff; }
     .status-pill.cloud { background: #7c3aed; color: #fff; }
     .tabs { display: flex; background: #1e293b; padding: 0 20px; gap: 4px; border-bottom: 1px solid rgba(255,255,255,0.08); flex-wrap: wrap; }
+    @keyframes tabPress { 0%{transform:scale(1)} 40%{transform:scale(.82)} 100%{transform:scale(1)} }
+    .tab.pressed svg { animation: tabPress .22s ease-out; }
+    @media (prefers-reduced-motion: reduce) { .tab.pressed svg { animation: none; } }
     .tab { padding: 10px 15px; font-size: 13px; font-weight: 500; color: rgba(255,255,255,0.5); background: none; border: none; cursor: pointer; border-bottom: 2px solid transparent; transition: all 0.15s; }
     .tab:hover { color: rgba(255,255,255,0.85); }
     .tab.active { color: white; border-bottom-color: #60a5fa; }
@@ -978,6 +981,14 @@ function renderActiveTab(){
   else if (activeTab==='manage'){ buildManageTab(); }
 }
 
+/* Haptics: short vibration on Android; silently does nothing on iPhone/desktop */
+function haptic(pattern){ try{ if(navigator.vibrate) navigator.vibrate(pattern); }catch(e){} }
+document.addEventListener('DOMContentLoaded',()=>{
+  document.querySelectorAll('.tabs .tab').forEach(t=>t.addEventListener('click',()=>{
+    haptic(10);
+    t.classList.remove('pressed'); void t.offsetWidth; t.classList.add('pressed');
+  }));
+});
 function switchTab(id, el){
   activeTab = id;
   document.querySelectorAll('.tab-pane').forEach(p=>p.classList.remove('active'));
@@ -1289,7 +1300,7 @@ function buildManageTab(){
       const input=row.querySelector('input'), saveBtn=row.querySelector('.save');
       const isDirty=()=> input.value!=='' && Number(input.value)!==Number(h.shares);
       input.addEventListener('input',()=> saveBtn.classList.toggle('dirty',isDirty()));
-      const doSave=async()=>{ if(!isDirty()) return; await setShares(h, input.value); toast('Updated'); computeTotals(); renderHeader(); buildManageTab(); };
+      const doSave=async()=>{ if(!isDirty()) return; await setShares(h, input.value); haptic([10,60,10]); toast('Updated'); computeTotals(); renderHeader(); buildManageTab(); };
       saveBtn.onclick=doSave;
       input.addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); input.blur(); doSave(); } });
       row.querySelector('.del').onclick=async()=>{ if(confirm(`Remove ${h.symbol} from ${h.account}?`)){ await deleteHolding(h); toast('Removed'); computeTotals(); renderHeader(); buildManageTab(); } };
