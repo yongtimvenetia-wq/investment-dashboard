@@ -18,6 +18,8 @@ from statistics import median
 
 HTML = "index.html"
 START, END = "// AUTO-DIVIDENDS-START", "// AUTO-DIVIDENDS-END"
+# Daily amounts only change when Yahoo's rough estimate differs by more than this (a real rate change).
+DAILY_CHANGE_THRESHOLD = 0.25
 LINE_RE = re.compile(
     r"^\s*(?P<sym>[A-Z0-9.]+):\s*\{\s*perShare:\s*(?P<per>[\d.]+),\s*frequency:\s*(?P<freq>\d+),"
     r"\s*freqLabel:\s*'(?P<label>[^']*)',\s*exDay:\s*\{month:\s*(?P<m>\d+),\s*day:\s*(?P<d>\d+)\}\s*\},?\s*$"
@@ -74,17 +76,10 @@ def compute(series, now):
         if len(run) < 3 or days <= 0:
             return None
         if freq == 365:
-            # Daily payers accrue every calendar day but pay on business days, and data sources differ
-            # in how they record weekends. A payment made Tuesday-Thursday always covers exactly one
-            # day, so average those (ignoring odd one-off amounts far from the typical value).
-            mid = sorted(a for d, a in run if d.weekday() in (1, 2, 3))
-            if len(mid) < 3:
-                return None
-            typical = mid[len(mid) // 2]
-            good = [a for a in mid if typical / 2.5 <= a <= typical * 2.5]
-            per_share = sum(good) / len(good)
-            entries = ", ".join(f"{d:%a %m-%d}={a:g}" for d, a in recent[-25:])
-            print(f"::notice title=Daily payer raw data::{entries}")
+            # Daily payers: Yahoo's record is patchy (missing days, several days lumped together), so
+            # this is only a rough estimate: total paid / calendar days covered. update() only uses it
+            # when it differs a lot from the current amount (i.e. a real rate change).
+            per_share = sum(a for _, a in run[1:]) / days
         else:
             # each payment covers the days since the previous one, so skip the first payment's amount
             per_share = sum(a for _, a in run[1:]) / days * 365 / freq
@@ -134,6 +129,16 @@ def update(html, fetcher, now):
             new_lines.append(line)
             continue
         old_annual = old["perShare"] * old["frequency"]
+        if new["frequency"] == 365 and old_annual > 0:
+            if old["frequency"] != 365:
+                # just switched to daily: payers normally keep the same yearly total, so carry it over
+                new["perShare"] = old_annual / 365
+                print(f"{sym}: switched to daily; keeping the same yearly total ({old_annual:.2f}/share)")
+            elif abs(new["perShare"] / old["perShare"] - 1) < DAILY_CHANGE_THRESHOLD:
+                # within the normal noise of Yahoo's daily data: keep the current amount
+                new["perShare"] = old["perShare"]
+            else:
+                print(f"{sym}: daily amount looks different ({old['perShare']:.4f} -> {new['perShare']:.4f}); updating")
         new_annual = new["perShare"] * new["frequency"]
         if old_annual > 0 and not (1 / 3 <= new_annual / old_annual <= 3):
             print(f"{sym}: yearly total jumped from {old_annual:.2f} to {new_annual:.2f}; looks suspicious, keeping existing values")
