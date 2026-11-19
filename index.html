@@ -362,7 +362,7 @@
     <div class="card"><div class="card-title">Annual income by ETF</div><div style="height:200px;position:relative;"><canvas id="divBarChart"></canvas></div></div>
     <div class="card"><div class="card-title">Payout breakdown</div><div style="overflow-x:auto;"><table class="payout-table" id="payoutTable"></table></div></div>
     <div class="card"><div class="card-title">Upcoming ex-dividend dates — next 90 days</div><div id="exDivTimeline"></div></div>
-    <div class="disclaimer">Estimates use each ETF's most recent dividend per share × payout frequency × your shares. STRC pays <strong>daily</strong> (accrues every calendar day, paid each business day, 365×/yr); all others are <strong>quarterly</strong>. Dates are <strong>anticipated</strong> and roll forward automatically once they pass. Actual dates and payouts vary. Not investment advice.</div>
+    <div class="disclaimer">Estimates use each ETF's most recent dividend per share × payout frequency × your shares. Each fund's payout schedule is shown in the table and is <strong>checked automatically every day</strong> against its recent payment history. Dates are <strong>anticipated</strong> and roll forward automatically once they pass. Actual dates and payouts vary. Not investment advice.</div>
   </div>
 
   <!-- PROJECTION -->
@@ -522,7 +522,7 @@ const ETF_DESCRIPTIONS = {
   MGK:  'Tracks the largest <strong>US mega-cap growth companies</strong> — Apple, Microsoft, Nvidia, Amazon, and Alphabet.',
   MAGS: 'Tracks the <strong>"Magnificent Seven"</strong> — Apple, Microsoft, Nvidia, Amazon, Google, Meta, and Tesla. Equal-weighted.',
   VXUS: 'Tracks <strong>thousands of stocks outside the US</strong> — Europe, Asia, and emerging markets.',
-  STRC: 'Strategy\'s <strong>Stretch preferred stock</strong> — a variable-rate preferred (about 12%/yr on its $100 value). Pays a dividend <strong>daily</strong> (accrues every calendar day, paid each business day).',
+  STRC: 'Strategy\'s <strong>Stretch preferred stock</strong> — a variable-rate preferred (about 12%/yr on its $100 value).',
   VNQ:  'Tracks <strong>US Real Estate Investment Trusts (REITs)</strong> — owners of apartments, offices, and shopping centres. Pays regular dividends.',
 };
 
@@ -534,7 +534,9 @@ const CATEGORY_OF = {
 const CATEGORY_LABELS = { domestic:{label:'Domestic',color:'#1d4ed8'}, international:{label:'International',color:'#f97316'}, commodity:{label:'Commodities',color:'#eab308'} };
 
 // Dividend config: perShare = most recent per-payment amount, frequency = payments/year
+// The block between the AUTO-DIVIDENDS markers is rewritten every day by scripts/update_dividends.py (GitHub Actions).
 const DIVIDENDS = {
+// AUTO-DIVIDENDS-START
   VOO:  { perShare: 1.80,   frequency: 4,  freqLabel: 'Quarterly',    exDay: {month: 8,  day: 28} },
   SPY:  { perShare: 1.78,   frequency: 4,  freqLabel: 'Quarterly',    exDay: {month: 8,  day: 18} },
   VXUS: { perShare: 0.60,   frequency: 4,  freqLabel: 'Quarterly',    exDay: {month: 8,  day: 18} },
@@ -543,6 +545,7 @@ const DIVIDENDS = {
   VDE:  { perShare: 1.05,   frequency: 4,  freqLabel: 'Quarterly',    exDay: {month: 8,  day: 28} },
   VNQ:  { perShare: 0.96,   frequency: 4,  freqLabel: 'Quarterly',    exDay: {month: 8,  day: 28} },
   BOTZ: { perShare: 0.06,   frequency: 4,  freqLabel: 'Quarterly',    exDay: {month: 11, day: 18} },
+// AUTO-DIVIDENDS-END
 };
 
 // Estimated 5-year quarterly history (for the history chart)
@@ -1158,7 +1161,7 @@ function nextExDiv(exDay, frequency){
   // move back a couple cycles first to ensure we can roll forward onto/after today
   d=new Date(today.getFullYear()-1, exDay.month, exDay.day);
   if (frequency>=300){ const n=new Date(today); n.setDate(n.getDate()+1); while(n.getDay()===0||n.getDay()===6) n.setDate(n.getDate()+1); return n; }
-  if (frequency>=24){ while(d<today) d.setDate(d.getDate()+14); return d; }
+  if (frequency>=24){ const step=Math.round(365/frequency); while(d<today) d.setDate(d.getDate()+step); return d; }
   const monthsPer=12/frequency; while(d<today) d.setMonth(d.getMonth()+monthsPer); return d;
 }
 function daysUntil(d){ const t=new Date(); t.setHours(0,0,0,0); return Math.round((d-t)/(1000*60*60*24)); }
