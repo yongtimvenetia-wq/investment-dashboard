@@ -74,17 +74,17 @@ def compute(series, now):
         if len(run) < 3 or days <= 0:
             return None
         if freq == 365:
-            # Daily payers accrue every calendar day but pay on business days. Data sources record this
-            # one of two ways: (a) Monday's entry includes the weekend's accrual, or (b) only one day's
-            # amount per business day, with weekend days missing. Tell them apart by comparing Mondays
-            # to the other weekdays.
-            mon = [a for d, a in run if d.weekday() == 0]
-            other = [a for d, a in run if d.weekday() in (1, 2, 3, 4)]
-            weekend_in_monday = mon and other and (sum(mon) / len(mon)) > 2 * (sum(other) / len(other))
-            if weekend_in_monday:
-                per_share = sum(a for _, a in run[1:]) / days   # spread over calendar days
-            else:
-                per_share = sum(a for _, a in run) / len(run)   # each entry is one day's amount
+            # Daily payers accrue every calendar day but pay on business days, and data sources differ
+            # in how they record weekends. A payment made Tuesday-Thursday always covers exactly one
+            # day, so average those (ignoring odd one-off amounts far from the typical value).
+            mid = sorted(a for d, a in run if d.weekday() in (1, 2, 3))
+            if len(mid) < 3:
+                return None
+            typical = mid[len(mid) // 2]
+            good = [a for a in mid if typical / 2.5 <= a <= typical * 2.5]
+            per_share = sum(good) / len(good)
+            entries = ", ".join(f"{d:%a %m-%d}={a:g}" for d, a in recent[-25:])
+            print(f"::notice title=Daily payer raw data::{entries}")
         else:
             # each payment covers the days since the previous one, so skip the first payment's amount
             per_share = sum(a for _, a in run[1:]) / days * 365 / freq
