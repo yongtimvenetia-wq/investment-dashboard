@@ -153,11 +153,25 @@
     .btn.ghost:hover { background: #e5e7eb; }
     .btn.danger { background: #fee2e2; color: #dc2626; }
     .btn.danger:hover { background: #fecaca; }
-    .edit-row { display: grid; grid-template-columns: 54px 1fr 130px 90px auto auto; gap: 8px; align-items: center; padding: 9px 0; border-bottom: 1px solid #f3f4f6; font-size: 13px; }
+    #editList { max-width: 600px; }
+    .edit-group { margin-bottom: 14px; }
+    .edit-group:last-child { margin-bottom: 0; }
+    .edit-group-title { font-size: 11px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: #6b7280; padding: 6px 0; border-bottom: 1px solid #e5e7eb; }
+    .edit-row { display: flex; align-items: center; gap: 8px; padding: 10px 0; border-bottom: 1px solid #f3f4f6; font-size: 13px; }
     .edit-row:last-child { border-bottom: none; }
-    .edit-row input { width: 100%; padding: 6px 8px; border: 1.5px solid #e5e7eb; border-radius: 6px; font-size: 13px; }
-    .edit-row .mini { padding: 6px 10px; font-size: 12px; }
-    @media (max-width: 620px) { .edit-row { grid-template-columns: 46px 1fr 80px; grid-auto-rows: auto; } .edit-row .acct-lbl, .edit-row .save-btn, .edit-row .del-btn { grid-column: span 3; } }
+    .edit-row .sym { font-weight: 700; width: 62px; flex-shrink: 0; }
+    .edit-row .sym small { display: block; font-size: 10px; font-weight: 500; color: #9ca3af; }
+    .edit-row input { width: 92px; flex-shrink: 0; padding: 7px 8px; -moz-appearance: textfield; border: 1.5px solid #e5e7eb; border-radius: 8px; font-size: 13px; }
+    .edit-row input::-webkit-outer-spin-button, .edit-row input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+    .edit-row input:focus { outline: none; border-color: #2563eb; }
+    .edit-row .px { flex: 1; min-width: 0; font-size: 12px; color: #6b7280; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .icon-act { width: 38px; height: 38px; flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center; border-radius: 10px; border: none; cursor: pointer; background: transparent; transition: background .15s, color .15s; }
+    .icon-act svg { width: 18px; height: 18px; }
+    .icon-act.save { color: #d1d5db; background: #f9fafb; cursor: default; }
+    .icon-act.save.dirty { color: #fff; background: #2563eb; cursor: pointer; }
+    .icon-act.del { color: #9ca3af; }
+    .icon-act.del:hover, .icon-act.del:active { color: #dc2626; background: #fee2e2; }
+    @media (max-width: 420px) { .edit-row { gap: 6px; } .edit-row .sym { width: 56px; } .edit-row input { width: 86px; padding: 7px 6px; } .icon-act { width: 34px; height: 34px; } }
 
     /* Modal */
     .modal-overlay { position: fixed; inset: 0; background: rgba(15,23,42,0.55); display: none; align-items: center; justify-content: center; padding: 16px; z-index: 50; }
@@ -1256,19 +1270,30 @@ function buildManageTab(){
   if(!HOLDINGS.length){ el.innerHTML='<div class="empty-state">No holdings yet.<br><button class="btn primary" onclick="importDefaults()">Import my May 2026 holdings</button></div>'; }
   else {
     const sorted=[...HOLDINGS].sort((a,b)=> a.account.localeCompare(b.account) || a.symbol.localeCompare(b.symbol));
+    const ICON_CHECK='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5L20 7"/></svg>';
+    const ICON_TRASH='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14M10 11v6M14 11v6"/></svg>';
+    let group=null, lastAcct=null;
     sorted.forEach(h=>{
+      if(h.account!==lastAcct){
+        group=document.createElement('div'); group.className='edit-group';
+        const t=document.createElement('div'); t.className='edit-group-title'; t.textContent=h.account;
+        group.appendChild(t); el.appendChild(group); lastAcct=h.account;
+      }
       const color=metaFor(h.symbol).color;
       const row=document.createElement('div'); row.className='edit-row';
-      row.innerHTML=`<div style="font-weight:700;color:${color}">${h.symbol}</div>`+
-        `<div class="acct-lbl" style="font-size:11px;color:#6b7280;">${h.account}${h.is_manual?' · manual':''}</div>`+
-        `<input type="number" step="any" min="0" value="${h.shares}" style="max-width:130px;">`+
-        `<div style="font-size:12px;color:#6b7280;">${h.is_manual?'@ '+fmt(h.manual_price||0):fmt((priceFor(h.symbol).c||0))}</div>`+
-        `<button class="btn primary mini save-btn">Save</button>`+
-        `<button class="btn danger mini del-btn">✕</button>`;
-      const input=row.querySelector('input');
-      row.querySelector('.save-btn').onclick=async()=>{ await setShares(h, input.value); toast('Updated'); computeTotals(); renderHeader(); buildManageTab(); };
-      row.querySelector('.del-btn').onclick=async()=>{ if(confirm(`Remove ${h.symbol} from ${h.account}?`)){ await deleteHolding(h); toast('Removed'); computeTotals(); renderHeader(); buildManageTab(); } };
-      el.appendChild(row);
+      row.innerHTML=`<div class="sym" style="color:${color}">${h.symbol}${h.is_manual?'<small>manual</small>':''}</div>`+
+        `<input type="number" inputmode="decimal" step="any" min="0" value="${h.shares}" aria-label="${h.symbol} shares">`+
+        `<div class="px">${h.is_manual?'@ '+fmt(h.manual_price||0):fmt((priceFor(h.symbol).c||0))}</div>`+
+        `<button class="icon-act save" aria-label="Save ${h.symbol}" title="Save">${ICON_CHECK}</button>`+
+        `<button class="icon-act del" aria-label="Remove ${h.symbol}" title="Remove">${ICON_TRASH}</button>`;
+      const input=row.querySelector('input'), saveBtn=row.querySelector('.save');
+      const isDirty=()=> input.value!=='' && Number(input.value)!==Number(h.shares);
+      input.addEventListener('input',()=> saveBtn.classList.toggle('dirty',isDirty()));
+      const doSave=async()=>{ if(!isDirty()) return; await setShares(h, input.value); toast('Updated'); computeTotals(); renderHeader(); buildManageTab(); };
+      saveBtn.onclick=doSave;
+      input.addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); input.blur(); doSave(); } });
+      row.querySelector('.del').onclick=async()=>{ if(confirm(`Remove ${h.symbol} from ${h.account}?`)){ await deleteHolding(h); toast('Removed'); computeTotals(); renderHeader(); buildManageTab(); } };
+      group.appendChild(row);
     });
   }
   const note=document.getElementById('manageModeNote');
