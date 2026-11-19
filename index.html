@@ -306,7 +306,7 @@
       <div class="price-bar" id="priceBar"></div>
       <div id="etfDescStrip"></div>
       <div class="chart-wrap"><canvas id="historyChart"></canvas></div>
-      <div class="disclaimer">⚠️ Historical prices are <strong>estimated</strong> from quarterly market data — not exact traded prices. The most recent point uses your live price when available.</div>
+      <div class="disclaimer" id="histDisclaimer">⚠️ Historical prices are <strong>estimated</strong> from quarterly market data — not exact traded prices. The most recent point uses your live price when available.</div>
     </div>
     <div class="card">
       <div class="card-title">Compare ETFs (normalised to $100 start)</div>
@@ -462,13 +462,14 @@
     <div class="sub">Paste your free keys here to turn on live prices and cross-device login. Everything works without them (local mode) — this just upgrades it. Keys are stored only in this browser.</div>
     <div class="msg" id="settingsMsg"></div>
     <div class="field"><label>Finnhub API key (live prices)</label><input id="cfgFinnhub" placeholder="e.g. cabc123..." autocomplete="off"></div>
+    <div class="field"><label>Twelve Data API key (real price history)</label><input id="cfgTwelve" placeholder="e.g. 9f8e7d..." autocomplete="off"></div>
     <div class="field"><label>Supabase Project URL (login + sync)</label><input id="cfgSupaUrl" placeholder="https://xxxx.supabase.co" autocomplete="off"></div>
     <div class="field"><label>Supabase anon public key</label><input id="cfgSupaKey" placeholder="eyJhbGci..." autocomplete="off"></div>
     <div class="modal-actions">
       <button class="btn ghost" onclick="closeModal('settingsModal')">Cancel</button>
       <button class="btn primary" id="saveSettingsBtn">Save &amp; reload</button>
     </div>
-    <div class="note">Don't have keys yet? See the setup guide (README) that came with this site. Free Finnhub key: finnhub.io — free Supabase: supabase.com</div>
+    <div class="note">Don't have keys yet? See the setup guide (README) that came with this site. Free Finnhub key: finnhub.io — free Twelve Data key: twelvedata.com — free Supabase: supabase.com</div>
   </div>
 </div>
 
@@ -545,8 +546,8 @@ const DIVIDENDS = {
 };
 
 // Estimated 5-year quarterly history (for the history chart)
-const HIST_LABELS = ["Jun'21","Sep'21","Dec'21","Mar'22","Jun'22","Sep'22","Dec'22","Mar'23","Jun'23","Sep'23","Dec'23","Mar'24","Jun'24","Sep'24","Dec'24","Mar'25","Jun'25","Sep'25","Dec'25","Mar'26","May'26"];
-const HIST_DATA = {
+let HIST_LABELS = ["Jun'21","Sep'21","Dec'21","Mar'22","Jun'22","Sep'22","Dec'22","Mar'23","Jun'23","Sep'23","Dec'23","Mar'24","Jun'24","Sep'24","Dec'24","Mar'25","Jun'25","Sep'25","Dec'25","Mar'26","May'26"];
+let HIST_DATA = {
   VOO:[386,385,425,393,339,318,350,375,402,389,439,487,494,503,545,510,540,570,610,645,685],
   SPY:[420,419,462,427,369,345,380,408,437,423,477,530,537,547,592,555,587,620,664,702,745],
   GLD:[168,165,168,174,162,154,168,178,178,180,186,193,215,234,248,280,310,340,375,400,413],
@@ -559,6 +560,9 @@ const HIST_DATA = {
   MAGS:[null,null,null,null,null,null,null,null,null,null,28,35,42,45,60,52,55,60,65,67,69],
   STRC:[null,null,null,null,null,null,null,null,115,113,123,118,116,110,107,122,135,140,145,112,99],
 };
+
+const HIST_LABELS_EST = HIST_LABELS.slice();
+const HIST_DATA_EST = JSON.parse(JSON.stringify(HIST_DATA));
 
 // Last-known prices (fallback when live prices aren't available). c=price, pc=previous close.
 const LAST_KNOWN = {
@@ -604,7 +608,7 @@ const ACCOUNT_COLORS = {
 /* ============================================================
    APP STATE
    ============================================================ */
-let CONFIG = { finnhub:'', supaUrl:'', supaKey:'' };
+let CONFIG = { finnhub:'', twelvedata:'', supaUrl:'', supaKey:'' };
 let supa = null;            // supabase client (if configured)
 let user = null;           // logged-in user (cloud mode)
 let MODE = 'local';        // 'local' | 'cloud'
@@ -818,6 +822,112 @@ function renderHeader(){
   updatePricePill();
 }
 
+
+/* ============================================================
+   REAL PRICE HISTORY (Twelve Data) — quarterly points, cached 24h
+   Falls back to the built-in estimates if there's no key or a fetch fails.
+   ============================================================ */
+const HIST_CACHE_KEY = 'dash_history_v1';
+const HIST_CACHE_HOURS = 24;
+const HIST_START = '2021-06-01';
+let historySource = 'estimated'; // 'estimated' | 'real' | 'loading'
+const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+function loadHistCache(){ try { return JSON.parse(localStorage.getItem(HIST_CACHE_KEY)||'null'); } catch(e){ return null; } }
+function saveHistCache(c){ try { localStorage.setItem(HIST_CACHE_KEY, JSON.stringify(c)); } catch(e){} }
+
+// monthly: {symbol: {'2021-06': close, ...}}  ->  quarterly labels + data
+function buildQuarterly(monthly){
+  const allMonths = new Set();
+  Object.values(monthly).forEach(m=>Object.keys(m).forEach(k=>allMonths.add(k)));
+  const sorted = [...allMonths].filter(k=>k>=HIST_START.slice(0,7)).sort();
+  if (!sorted.length) return null;
+  const latest = sorted[sorted.length-1];
+  const keys = sorted.filter(k=>{ const mo=+k.slice(5,7); return mo%3===0 || k===latest; });
+  const labels = keys.map(k=>MONTHS[+k.slice(5,7)-1]+"'"+k.slice(2,4));
+  const data = {};
+  Object.entries(monthly).forEach(([sym,m])=>{
+    data[sym] = keys.map(k=> m[k]!=null ? Math.round(m[k]*100)/100 : null);
+  });
+  return { labels, data };
+}
+
+function applyHistory(monthly){
+  const q = buildQuarterly(monthly); if (!q) return false;
+  // keep estimates for any symbol the API didn't return, lined up by label
+  const merged = {};
+  const estIdx = {}; HIST_LABELS_EST.forEach((l,i)=>estIdx[l]=i);
+  Object.keys(HIST_DATA_EST).forEach(sym=>{
+    if (!q.data[sym]) merged[sym] = q.labels.map(l=> estIdx[l]!=null ? HIST_DATA_EST[sym][estIdx[l]] : null);
+  });
+  HIST_LABELS = q.labels;
+  HIST_DATA = Object.assign(merged, q.data);
+  return true;
+}
+
+function updateHistDisclaimer(){
+  const el = document.getElementById('histDisclaimer'); if (!el) return;
+  if (historySource==='real'){
+    el.innerHTML = '✅ Historical prices are <strong>real</strong> quarter-end closing prices from Twelve Data, updated once a day. The most recent point uses your live price when available.';
+  } else if (historySource==='loading'){
+    el.innerHTML = '⏳ Loading real price history… showing estimates until it arrives (can take about a minute).';
+  } else {
+    el.innerHTML = CONFIG.twelvedata
+      ? '⚠️ Couldn\'t load real price history right now, so these are <strong>estimates</strong>. Check your Twelve Data key in ⚙︎ Settings.'
+      : '⚠️ Historical prices are <strong>estimated</strong>. Add a free Twelve Data key in ⚙︎ Settings to show real prices up to today.';
+  }
+}
+
+function parseSeries(obj){
+  // Twelve Data returns {meta, values:[{datetime:'2026-09-22', close:'87.49'}...], status}
+  if (!obj || obj.status==='error' || !Array.isArray(obj.values)) return null;
+  const m = {};
+  obj.values.forEach(v=>{ const k=v.datetime.slice(0,7); const c=parseFloat(v.close); if (!isNaN(c) && m[k]==null) m[k]=c; });
+  return Object.keys(m).length ? m : null;
+}
+
+async function fetchHistoryBatch(syms){
+  const url = `https://api.twelvedata.com/time_series?symbol=${encodeURIComponent(syms.join(','))}&interval=1month&start_date=${HIST_START}&outputsize=5000&apikey=${encodeURIComponent(CONFIG.twelvedata)}`;
+  const r = await fetch(url); const j = await r.json();
+  const out = {};
+  if (syms.length===1){ const m=parseSeries(j); if (m) out[syms[0]]=m; }
+  else syms.forEach(s=>{ const m=parseSeries(j[s]); if (m) out[s]=m; });
+  return out;
+}
+
+async function loadRealHistory(force){
+  if (!CONFIG.twelvedata){ historySource='estimated'; updateHistDisclaimer(); return; }
+  const syms = [...new Set(HOLDINGS.filter(h=>!h.is_manual).map(h=>h.symbol))];
+  if (!syms.length) return;
+  const cache = loadHistCache();
+  const fresh = cache && (Date.now()-cache.savedAt) < HIST_CACHE_HOURS*3600*1000;
+  const cached = (cache && cache.monthly) || {};
+  const missing = force || !fresh ? syms : syms.filter(s=>!cached[s]);
+  if (cache && cache.monthly && applyHistory(cached)) historySource='real';
+  if (!missing.length){ updateHistDisclaimer(); if (activeTab==='history') renderActiveTab(); return; }
+
+  if (historySource!=='real') historySource='loading';
+  updateHistDisclaimer();
+  const monthly = Object.assign({}, cached);
+  let gotAny = false;
+  // free plan allows 8 symbols per minute, so fetch in groups of 8 with a pause between
+  for (let i=0; i<missing.length; i+=8){
+    if (i>0) await new Promise(res=>setTimeout(res, 62000));
+    try {
+      const got = await fetchHistoryBatch(missing.slice(i,i+8));
+      if (Object.keys(got).length){ Object.assign(monthly, got); gotAny = true; }
+    } catch(e){ /* keep going with what we have */ }
+    if (gotAny && applyHistory(monthly)){
+      historySource='real';
+      saveHistCache({ savedAt: Date.now(), monthly });
+      updateHistDisclaimer();
+      if (activeTab==='history'){ buildEtfSelector(); buildCompareSelector(); renderActiveTab(); }
+    }
+  }
+  if (!gotAny && historySource!=='real') historySource='estimated';
+  updateHistDisclaimer();
+}
+
 /* ============================================================
    RENDER (re-runs on any data/price change)
    ============================================================ */
@@ -921,7 +1031,7 @@ function updateHistoryChart(sym){
   const color = metaFor(sym).color;
   const prices = (HIST_DATA[sym]||[]).slice();
   // replace last point with live price if available
-  const q = priceFor(sym); if (q.c>0 && prices.length) prices[prices.length-1] = Math.round(q.c);
+  const q = priceFor(sym); if (q.c>0 && prices.length) prices[prices.length-1] = historySource==='real' ? Math.round(q.c*100)/100 : Math.round(q.c);
   const labels = HIST_LABELS.filter((_,i)=>prices[i]!==null);
   const vals = prices.filter(p=>p!==null);
   const ctx = document.getElementById('historyChart').getContext('2d');
@@ -1219,13 +1329,14 @@ document.getElementById('authBtn').onclick=async()=>{
 function showSettingsMsg(text,kind){ const m=document.getElementById('settingsMsg'); m.textContent=text; m.className='msg '+(kind||''); }
 document.getElementById('settingsBtn').onclick=()=>{
   document.getElementById('cfgFinnhub').value=CONFIG.finnhub||'';
+  document.getElementById('cfgTwelve').value=CONFIG.twelvedata||'';
   document.getElementById('cfgSupaUrl').value=CONFIG.supaUrl||'';
   document.getElementById('cfgSupaKey').value=CONFIG.supaKey||'';
   showSettingsMsg('','');
   openModal('settingsModal');
 };
 document.getElementById('saveSettingsBtn').onclick=()=>{
-  saveConfig({ finnhub:document.getElementById('cfgFinnhub').value.trim(), supaUrl:document.getElementById('cfgSupaUrl').value.trim(), supaKey:document.getElementById('cfgSupaKey').value.trim() });
+  saveConfig({ finnhub:document.getElementById('cfgFinnhub').value.trim(), twelvedata:document.getElementById('cfgTwelve').value.trim(), supaUrl:document.getElementById('cfgSupaUrl').value.trim(), supaKey:document.getElementById('cfgSupaKey').value.trim() });
   toast('Settings saved'); location.reload();
 };
 
@@ -1302,6 +1413,8 @@ async function boot(){
   }
   await fetchPrices();
   renderAll();
+  updateHistDisclaimer();
+  loadRealHistory(false); // runs in the background; charts refresh when data arrives
 }
 boot();
 </script>
