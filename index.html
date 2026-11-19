@@ -362,7 +362,7 @@
     <div class="card"><div class="card-title">Annual income by ETF</div><div style="height:200px;position:relative;"><canvas id="divBarChart"></canvas></div></div>
     <div class="card"><div class="card-title">Payout breakdown</div><div style="overflow-x:auto;"><table class="payout-table" id="payoutTable"></table></div></div>
     <div class="card"><div class="card-title">Upcoming ex-dividend dates — next 90 days</div><div id="exDivTimeline"></div></div>
-    <div class="disclaimer">Estimates use each ETF's most recent dividend per share × payout frequency × your shares. STRC pays <strong>every two weeks</strong> (bi-weekly, 26×/yr); all others are <strong>quarterly</strong>. Dates are <strong>anticipated</strong> and roll forward automatically once they pass. Actual dates and payouts vary. Not investment advice.</div>
+    <div class="disclaimer">Estimates use each ETF's most recent dividend per share × payout frequency × your shares. STRC pays <strong>daily</strong> (accrues every calendar day, paid each business day, 365×/yr); all others are <strong>quarterly</strong>. Dates are <strong>anticipated</strong> and roll forward automatically once they pass. Actual dates and payouts vary. Not investment advice.</div>
   </div>
 
   <!-- PROJECTION -->
@@ -507,7 +507,7 @@ const ETF_META = {
   MGK:  { name: 'Vanguard Mega Cap Growth ETF',      color: '#10b981' },
   MAGS: { name: 'Roundhill Magnificent Seven ETF',   color: '#ec4899' },
   VXUS: { name: 'Vanguard Total Intl Stock ETF',     color: '#f97316' },
-  STRC: { name: 'Strive U.S. Energy ETF',            color: '#6b7280' },
+  STRC: { name: 'Strategy Stretch Preferred (STRC)',            color: '#6b7280' },
   VNQ:  { name: 'Vanguard Real Estate ETF',          color: '#8b5cf6' },
 };
 function metaFor(sym){ return ETF_META[sym] || { name: sym, color: '#64748b' }; }
@@ -522,7 +522,7 @@ const ETF_DESCRIPTIONS = {
   MGK:  'Tracks the largest <strong>US mega-cap growth companies</strong> — Apple, Microsoft, Nvidia, Amazon, and Alphabet.',
   MAGS: 'Tracks the <strong>"Magnificent Seven"</strong> — Apple, Microsoft, Nvidia, Amazon, Google, Meta, and Tesla. Equal-weighted.',
   VXUS: 'Tracks <strong>thousands of stocks outside the US</strong> — Europe, Asia, and emerging markets.',
-  STRC: 'Tracks <strong>US energy companies</strong> with an emphasis on shareholder returns. Pays a dividend <strong>every two weeks</strong> (bi-weekly).',
+  STRC: 'Strategy\'s <strong>Stretch preferred stock</strong> — a variable-rate preferred (about 12%/yr on its $100 value). Pays a dividend <strong>daily</strong> (accrues every calendar day, paid each business day).',
   VNQ:  'Tracks <strong>US Real Estate Investment Trusts (REITs)</strong> — owners of apartments, offices, and shopping centres. Pays regular dividends.',
 };
 
@@ -539,7 +539,7 @@ const DIVIDENDS = {
   SPY:  { perShare: 1.78,   frequency: 4,  freqLabel: 'Quarterly',    exDay: {month: 8,  day: 18} },
   VXUS: { perShare: 0.60,   frequency: 4,  freqLabel: 'Quarterly',    exDay: {month: 8,  day: 18} },
   MGK:  { perShare: 0.22,   frequency: 4,  freqLabel: 'Quarterly',    exDay: {month: 8,  day: 28} },
-  STRC: { perShare: 0.4792, frequency: 26, freqLabel: 'Bi-Weekly', exDay: {month: 7,  day: 15} },
+  STRC: { perShare: 0.0329, frequency: 365, freqLabel: 'Daily',    exDay: {month: 10, day: 1} },
   VDE:  { perShare: 1.05,   frequency: 4,  freqLabel: 'Quarterly',    exDay: {month: 8,  day: 28} },
   VNQ:  { perShare: 0.96,   frequency: 4,  freqLabel: 'Quarterly',    exDay: {month: 8,  day: 28} },
   BOTZ: { perShare: 0.06,   frequency: 4,  freqLabel: 'Quarterly',    exDay: {month: 11, day: 18} },
@@ -1157,6 +1157,7 @@ function nextExDiv(exDay, frequency){
   let d=new Date(today.getFullYear(), exDay.month, exDay.day);
   // move back a couple cycles first to ensure we can roll forward onto/after today
   d=new Date(today.getFullYear()-1, exDay.month, exDay.day);
+  if (frequency>=300){ const n=new Date(today); n.setDate(n.getDate()+1); while(n.getDay()===0||n.getDay()===6) n.setDate(n.getDate()+1); return n; }
   if (frequency>=24){ while(d<today) d.setDate(d.getDate()+14); return d; }
   const monthsPer=12/frequency; while(d<today) d.setMonth(d.getMonth()+monthsPer); return d;
 }
