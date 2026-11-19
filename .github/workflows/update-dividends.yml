@@ -18,6 +18,9 @@ jobs:
           python-version: "3.12"
       - run: pip install yfinance
       - run: python scripts/update_dividends.py
+        env:
+          SUPABASE_URL: https://ebamjhuteebmtfxvppfs.supabase.co
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
       - name: Publish if anything changed
         run: |
           if git diff --quiet; then

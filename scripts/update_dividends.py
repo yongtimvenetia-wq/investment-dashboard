@@ -11,8 +11,11 @@ Safety rules: if a fund's data can't be fetched, has too few payments, or
 the new yearly total looks wildly different from the old one, that fund's
 line is left exactly as it was.
 """
+import json
+import os
 import re
 import sys
+import urllib.request
 from datetime import datetime, timedelta, timezone
 from statistics import median
 
@@ -21,7 +24,7 @@ START, END = "// AUTO-DIVIDENDS-START", "// AUTO-DIVIDENDS-END"
 # Daily amounts only change when Yahoo's rough estimate differs by more than this (a real rate change).
 DAILY_CHANGE_THRESHOLD = 0.25
 LINE_RE = re.compile(
-    r"^\s*(?P<sym>[A-Z0-9.]+):\s*\{\s*perShare:\s*(?P<per>[\d.]+),\s*frequency:\s*(?P<freq>\d+),"
+    r"^\s*(?P<q>'?)(?P<sym>[A-Z0-9.\-]+)(?P=q):\s*\{\s*perShare:\s*(?P<per>[\d.]+),\s*frequency:\s*(?P<freq>\d+),"
     r"\s*freqLabel:\s*'(?P<label>[^']*)',\s*exDay:\s*\{month:\s*(?P<m>\d+),\s*day:\s*(?P<d>\d+)\}\s*\},?\s*$"
 )
 
@@ -89,9 +92,32 @@ def compute(series, now):
             "month": last_date.month - 1, "day": last_date.day}  # JS months are 0-based
 
 
+SYMBOL_OK = re.compile(r"^[A-Z0-9][A-Z0-9.\-]{0,9}$")
+
+
+def fetch_holding_symbols():
+    """Symbols currently in the dashboard's Supabase holdings table (empty list if not configured)."""
+    url, key = os.environ.get("SUPABASE_URL", "").rstrip("/"), os.environ.get("SUPABASE_SERVICE_KEY", "")
+    if not url or not key:
+        print("Supabase not configured; only updating funds already on the dividend list")
+        return []
+    headers = {"apikey": key}
+    if not key.startswith("sb_"):          # older-style keys are also sent as a bearer token
+        headers["Authorization"] = f"Bearer {key}"
+    req = urllib.request.Request(f"{url}/rest/v1/holdings?select=symbol", headers=headers)
+    try:
+        with urllib.request.urlopen(req, timeout=30) as r:
+            rows = json.load(r)
+    except Exception as e:
+        print(f"Could not read holdings from Supabase ({e}); only updating funds already on the list")
+        return []
+    syms = sorted({str(row.get("symbol", "")).strip().upper() for row in rows})
+    return [x for x in syms if SYMBOL_OK.match(x)]
+
+
 def fetch(sym):
     import yfinance as yf
-    s = yf.Ticker(sym).dividends
+    s = yf.Ticker(sym.replace(".", "-")).dividends   # Yahoo writes BRK.B as BRK-B
     out = []
     for idx, amt in s.items():
         d = idx.to_pydatetime()
@@ -100,13 +126,17 @@ def fetch(sym):
     return sorted(out)
 
 
+def js_key(sym):
+    return sym if re.match(r"^[A-Z_$][A-Z0-9_$]*$", sym) else f"'{sym}'"
+
+
 def fmt_line(sym, v):
     per = f"{v['perShare']:.4f}".rstrip("0").rstrip(".") if v["perShare"] < 1 else f"{v['perShare']:.2f}"
-    return (f"  {sym + ':':<6}{{ perShare: {per + ',':<8}frequency: {str(v['frequency']) + ',':<4} "
+    return (f"  {js_key(sym) + ':':<6}{{ perShare: {per + ',':<8}frequency: {str(v['frequency']) + ',':<4} "
             f"freqLabel: {repr(v['freqLabel']) + ',':<15}exDay: {{month: {v['month']}, day: {v['day']}}} }},")
 
 
-def update(html, fetcher, now):
+def update(html, fetcher, now, held=()):
     a, b = html.index(START) + len(START), html.index(END)
     lines = html[a:b].strip("\n").split("\n")
     new_lines, changes = [], []
@@ -149,6 +179,22 @@ def update(html, fetcher, now):
             changes.append(f"{sym}: {old['freqLabel']} -> {new['freqLabel']}")
         new_lines.append(line_new)
         print(f"{sym}: {new['freqLabel']} ({new['frequency']}x/yr), {new['perShare']:.4f}/share, last ex-date month={new['month']+1} day={new['day']}")
+    # Funds in your holdings that aren't on the dividend list yet: look them up and add them.
+    listed = {m["sym"] for m in (LINE_RE.match(l) for l in new_lines) if m}
+    for sym in held:
+        if sym in listed:
+            continue
+        try:
+            new = compute(fetcher(sym), now)
+        except Exception as e:
+            print(f"{sym} (new holding): could not fetch ({e}); will try again tomorrow")
+            continue
+        if new is None:
+            print(f"{sym} (new holding): no recent dividends found (it may not pay any); not added")
+            continue
+        new_lines.append(fmt_line(sym, new))
+        changes.append(f"{sym}: added ({new['freqLabel']})")
+        print(f"{sym} (new holding): added - {new['freqLabel']} ({new['frequency']}x/yr), {new['perShare']:.4f}/share")
     out = html[:a] + "\n" + "\n".join(new_lines) + "\n" + html[b:]
     return out, changes
 
@@ -156,9 +202,9 @@ def update(html, fetcher, now):
 def main():
     html = open(HTML, encoding="utf-8").read()
     now = datetime.now(timezone.utc).replace(tzinfo=None)
-    out, changes = update(html, fetch, now)
+    out, changes = update(html, fetch, now, fetch_holding_symbols())
     if changes:
-        print("Schedule changes:", "; ".join(changes))
+        print("Changes:", "; ".join(changes))
     if out != html:
         open(HTML, "w", encoding="utf-8").write(out)
         print("index.html updated")
