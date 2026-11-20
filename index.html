@@ -154,8 +154,14 @@
     .btn.primary:hover { background: #1d4ed8; }
     .btn.ghost { background: #f3f4f6; color: #374151; }
     .btn.ghost:hover { background: #e5e7eb; }
-    .btn.danger { background: #dc2626; color: #fff; }
-    .btn.danger:hover { background: #b91c1c; }
+    .btn.danger { background: transparent; color: #dc2626; border: 1.5px solid #dc2626; }
+    .btn.danger:hover { background: #fee2e2; }
+    .btn.primary.mini.save-btn, .btn.danger.mini.del-btn {
+      width: 32px; height: 32px; padding: 0; display: inline-flex; align-items: center; justify-content: center;
+      font-size: 15px; border-radius: 6px; flex-shrink: 0;
+    }
+    .btn.primary.mini.save-btn { background: transparent; color: #2563eb; border: 1.5px solid #2563eb; }
+    .btn.primary.mini.save-btn:hover { background: #eff6ff; }
     .edit-row { display: grid; grid-template-columns: 54px 1fr 130px 90px auto auto; gap: 8px; align-items: center; padding: 9px 0; border-bottom: 1px solid #f3f4f6; font-size: 13px; }
     .edit-row:last-child { border-bottom: none; }
     .edit-row .sym { font-weight: 700; width: 62px; flex-shrink: 0; }
