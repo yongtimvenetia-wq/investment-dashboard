@@ -33,6 +33,9 @@
     .status-pill.local { background: #64748b; color: #fff; }
     .status-pill.cloud { background: #7c3aed; color: #fff; }
     .tabs { display: flex; background: #1e293b; padding: 0 20px; gap: 4px; border-bottom: 1px solid rgba(255,255,255,0.08); flex-wrap: wrap; }
+    @keyframes tabPress { 0%{transform:scale(1)} 40%{transform:scale(.82)} 100%{transform:scale(1)} }
+    .tab.pressed svg { animation: tabPress .22s ease-out; }
+    @media (prefers-reduced-motion: reduce) { .tab.pressed svg { animation: none; } }
     .tab { padding: 10px 15px; font-size: 13px; font-weight: 500; color: rgba(255,255,255,0.5); background: none; border: none; cursor: pointer; border-bottom: 2px solid transparent; transition: all 0.15s; }
     .tab:hover { color: rgba(255,255,255,0.85); }
     .tab.active { color: white; border-bottom-color: #60a5fa; }
@@ -155,9 +158,19 @@
     .btn.danger:hover { background: #b91c1c; }
     .edit-row { display: grid; grid-template-columns: 54px 1fr 130px 90px auto auto; gap: 8px; align-items: center; padding: 9px 0; border-bottom: 1px solid #f3f4f6; font-size: 13px; }
     .edit-row:last-child { border-bottom: none; }
-    .edit-row input { width: 100%; padding: 6px 8px; border: 1.5px solid #e5e7eb; border-radius: 6px; font-size: 13px; }
-    .edit-row .mini { padding: 6px 10px; font-size: 12px; }
-    @media (max-width: 620px) { .edit-row { grid-template-columns: 46px 1fr 80px; grid-auto-rows: auto; } .edit-row .acct-lbl, .edit-row .save-btn, .edit-row .del-btn { grid-column: span 3; } }
+    .edit-row .sym { font-weight: 700; width: 62px; flex-shrink: 0; }
+    .edit-row .sym small { display: block; font-size: 10px; font-weight: 500; color: #9ca3af; }
+    .edit-row input { width: 92px; flex-shrink: 0; padding: 7px 8px; -moz-appearance: textfield; border: 1.5px solid #e5e7eb; border-radius: 8px; font-size: 13px; }
+    .edit-row input::-webkit-outer-spin-button, .edit-row input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+    .edit-row input:focus { outline: none; border-color: #2563eb; }
+    .edit-row .px { flex: 1; min-width: 0; font-size: 12px; color: #6b7280; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .icon-act { width: 38px; height: 38px; flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center; border-radius: 10px; border: none; cursor: pointer; background: transparent; transition: background .15s, color .15s; }
+    .icon-act svg { width: 18px; height: 18px; }
+    .icon-act.save { color: #d1d5db; background: #f9fafb; cursor: default; }
+    .icon-act.save.dirty { color: #fff; background: #2563eb; cursor: pointer; }
+    .icon-act.del { color: #9ca3af; }
+    .icon-act.del:hover, .icon-act.del:active { color: #dc2626; background: #fee2e2; }
+    @media (max-width: 420px) { .edit-row { gap: 6px; } .edit-row .sym { width: 56px; } .edit-row input { width: 86px; padding: 7px 6px; } .icon-act { width: 34px; height: 34px; } }
 
     /* Modal */
     .modal-overlay { position: fixed; inset: 0; background: rgba(15,23,42,0.55); display: none; align-items: center; justify-content: center; padding: 16px; z-index: 50; }
@@ -964,6 +977,14 @@ function renderActiveTab(){
   else if (activeTab==='manage'){ buildManageTab(); }
 }
 
+/* Haptics: short vibration on Android; silently does nothing on iPhone/desktop */
+function haptic(pattern){ try{ if(navigator.vibrate) navigator.vibrate(pattern); }catch(e){} }
+document.addEventListener('DOMContentLoaded',()=>{
+  document.querySelectorAll('.tabs .tab').forEach(t=>t.addEventListener('click',()=>{
+    haptic(10);
+    t.classList.remove('pressed'); void t.offsetWidth; t.classList.add('pressed');
+  }));
+});
 function switchTab(id, el){
   activeTab = id;
   document.querySelectorAll('.tab-pane').forEach(p=>p.classList.remove('active'));
@@ -1256,7 +1277,15 @@ function buildManageTab(){
   if(!HOLDINGS.length){ el.innerHTML='<div class="empty-state">No holdings yet.<br><button class="btn primary" onclick="importDefaults()">Import my May 2026 holdings</button></div>'; }
   else {
     const sorted=[...HOLDINGS].sort((a,b)=> a.account.localeCompare(b.account) || a.symbol.localeCompare(b.symbol));
+    const ICON_CHECK='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5L20 7"/></svg>';
+    const ICON_TRASH='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14M10 11v6M14 11v6"/></svg>';
+    let group=null, lastAcct=null;
     sorted.forEach(h=>{
+      if(h.account!==lastAcct){
+        group=document.createElement('div'); group.className='edit-group';
+        const t=document.createElement('div'); t.className='edit-group-title'; t.textContent=h.account;
+        group.appendChild(t); el.appendChild(group); lastAcct=h.account;
+      }
       const color=metaFor(h.symbol).color;
       const row=document.createElement('div'); row.className='edit-row';
       row.innerHTML=`<div style="font-weight:700;color:${color}">${h.symbol}</div>`+
