@@ -1,6 +1,6 @@
 // Lets the dashboard install as a phone app and open even with a weak signal.
 // It only saves the page itself; prices and your Supabase data are always fetched live.
-const CACHE = 'investments-v4';
+const CACHE = 'investments-v5';
 const SHELL = ['./', './index.html', './manifest.json', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', e => {

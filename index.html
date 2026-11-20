@@ -36,6 +36,11 @@
     @keyframes tabPress { 0%{transform:scale(1)} 40%{transform:scale(.82)} 100%{transform:scale(1)} }
     .tab.pressed svg { animation: tabPress .22s ease-out; }
     @media (prefers-reduced-motion: reduce) { .tab.pressed svg { animation: none; } }
+    @keyframes paneFromRight { from { opacity:.3; transform: translateX(28px); } to { opacity:1; transform:none; } }
+    @keyframes paneFromLeft  { from { opacity:.3; transform: translateX(-28px); } to { opacity:1; transform:none; } }
+    .tab-pane.slide-next { animation: paneFromRight .22s ease-out; }
+    .tab-pane.slide-prev { animation: paneFromLeft .22s ease-out; }
+    @media (prefers-reduced-motion: reduce) { .tab-pane.slide-next, .tab-pane.slide-prev { animation: none; } }
     .tab { padding: 10px 15px; font-size: 13px; font-weight: 500; color: rgba(255,255,255,0.5); background: none; border: none; cursor: pointer; border-bottom: 2px solid transparent; transition: all 0.15s; }
     .tab:hover { color: rgba(255,255,255,0.85); }
     .tab.active { color: white; border-bottom-color: #60a5fa; }
@@ -1026,11 +1031,18 @@ document.addEventListener('DOMContentLoaded',()=>{
     t.classList.remove('pressed'); void t.offsetWidth; t.classList.add('pressed');
   }));
 });
-function switchTab(id, el){
+function switchTab(id, el, opts){
+  opts = opts || {};
+  const prevTab = activeTab;
+  /* Back gesture support: record each tab change so Android "back" retraces your steps */
+  if (!opts.fromHistory && prevTab && prevTab !== id) { try { history.pushState({tab:id}, '', location.pathname + location.search); } catch(e){} }
   activeTab = id;
   document.querySelectorAll('.tab-pane').forEach(p=>p.classList.remove('active'));
   document.querySelectorAll('.tabs .tab').forEach(t=>t.classList.remove('active'));
-  document.getElementById('pane-'+id).classList.add('active');
+  const paneEl=document.getElementById('pane-'+id);
+  paneEl.classList.remove('slide-next','slide-prev');
+  if (opts.slide) { void paneEl.offsetWidth; paneEl.classList.add(opts.slide==='next'?'slide-next':'slide-prev'); }
+  paneEl.classList.add('active');
   el.classList.add('active');
   renderActiveTab();
   if (window.matchMedia('(max-width: 640px)').matches) window.scrollTo({top:0, behavior:'smooth'});
@@ -1466,6 +1478,46 @@ document.getElementById('addBtn').onclick=async()=>{
   switchTabByName('manage');
 };
 function switchTabByName(name){ const btn=[...document.querySelectorAll('.tabs .tab')].find(b=>b.getAttribute('onclick').includes(`'${name}'`)); if(btn) switchTab(name, btn); }
+
+/* ---------- Android back gesture + swipe between tabs ---------- */
+const TAB_ORDER=['history','portfolio','accounts','dividends','projection','manage'];
+function tabBtn(name){ return [...document.querySelectorAll('.tabs .tab')].find(b=>b.getAttribute('onclick').includes(`'${name}'`)); }
+try { history.replaceState({tab: activeTab || 'history'}, ''); } catch(e){}
+window.addEventListener('popstate', e=>{
+  const name=(e.state && e.state.tab) || 'history';
+  const b=tabBtn(name); if(!b || name===activeTab) return;
+  const dir = TAB_ORDER.indexOf(name) > TAB_ORDER.indexOf(activeTab) ? 'next' : 'prev';
+  switchTab(name, b, {fromHistory:true, slide:dir});
+});
+(function(){
+  const area=document.querySelector('.content'); if(!area) return;
+  let sx=0, sy=0, st=0, tracking=false;
+  function blocked(el){
+    for(let n=el; n && n!==area; n=n.parentElement){
+      if (n.matches && n.matches('canvas, input, select, textarea, button, .modal-overlay, .no-swipe')) return true;
+      if (n.scrollWidth > n.clientWidth + 2) { const ox=getComputedStyle(n).overflowX; if (ox==='auto'||ox==='scroll') return true; }
+    }
+    return false;
+  }
+  area.addEventListener('touchstart', e=>{
+    if (e.touches.length!==1) { tracking=false; return; }
+    const t=e.touches[0];
+    // leave the screen edges to Android's own back gesture
+    if (t.clientX < 24 || t.clientX > window.innerWidth - 24 || blocked(e.target)) { tracking=false; return; }
+    sx=t.clientX; sy=t.clientY; st=Date.now(); tracking=true;
+  }, {passive:true});
+  area.addEventListener('touchend', e=>{
+    if (!tracking) return; tracking=false;
+    const t=e.changedTouches[0], dx=t.clientX-sx, dy=t.clientY-sy;
+    if (Date.now()-st > 700 || Math.abs(dx) < 70 || Math.abs(dx) < Math.abs(dy)*1.8) return;
+    const i=TAB_ORDER.indexOf(activeTab), ni = dx<0 ? i+1 : i-1;
+    if (ni<0 || ni>=TAB_ORDER.length) return;
+    const b=tabBtn(TAB_ORDER[ni]); if(!b) return;
+    if (typeof haptic==='function') haptic(10);
+    switchTab(TAB_ORDER[ni], b, {slide: dx<0 ? 'next' : 'prev'});
+    b.scrollIntoView && b.scrollIntoView({block:'nearest', inline:'nearest'});
+  }, {passive:true});
+})();
 /* Mobile ⋮ menu */
 (function(){
   const btn=document.getElementById('menuBtn'), grp=document.getElementById('actionGroup');
