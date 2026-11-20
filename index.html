@@ -14,6 +14,13 @@
   <style>
     :root { color-scheme: light; }
     * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { overscroll-behavior-y: contain; }
+    .ptr { position: fixed; left: 50%; top: calc(env(safe-area-inset-top, 0px) + 10px); width: 38px; height: 38px; margin-left: -19px; border-radius: 50%; background: #fff; box-shadow: 0 2px 10px rgba(0,0,0,.18); display: flex; align-items: center; justify-content: center; z-index: 2000; opacity: 0; transform: translateY(-60px); pointer-events: none; color: #2563eb; }
+    .ptr svg { width: 20px; height: 20px; transition: transform .1s; }
+    .ptr.ready svg { color: #1d4ed8; }
+    .ptr.spinning { opacity: 1; transform: translateY(20px); transition: transform .2s, opacity .2s; }
+    .ptr.spinning svg { animation: spin .8s linear infinite; }
+    .ptr.release { transition: transform .25s, opacity .25s; }
     body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f0f2f5; color: #111827; min-height: 100vh; }
     button { font-family: inherit; }
     .header { background: #1e293b; color: white; padding: 18px 24px 14px; }
@@ -36,6 +43,11 @@
     @keyframes tabPress { 0%{transform:scale(1)} 40%{transform:scale(.82)} 100%{transform:scale(1)} }
     .tab.pressed svg { animation: tabPress .22s ease-out; }
     @media (prefers-reduced-motion: reduce) { .tab.pressed svg { animation: none; } }
+    @keyframes paneFromRight { from { opacity:.3; transform: translateX(28px); } to { opacity:1; transform:none; } }
+    @keyframes paneFromLeft  { from { opacity:.3; transform: translateX(-28px); } to { opacity:1; transform:none; } }
+    .tab-pane.slide-next { animation: paneFromRight .22s ease-out; }
+    .tab-pane.slide-prev { animation: paneFromLeft .22s ease-out; }
+    @media (prefers-reduced-motion: reduce) { .tab-pane.slide-next, .tab-pane.slide-prev { animation: none; } }
     .tab { padding: 10px 15px; font-size: 13px; font-weight: 500; color: rgba(255,255,255,0.5); background: none; border: none; cursor: pointer; border-bottom: 2px solid transparent; transition: all 0.15s; }
     .tab:hover { color: rgba(255,255,255,0.85); }
     .tab.active { color: white; border-bottom-color: #60a5fa; }
@@ -211,6 +223,7 @@
     .proj-milestone-value { font-size: 32px; font-weight: 900; letter-spacing: -1.5px; margin-bottom: 4px; }
     .proj-milestone-sub { font-size: 12px; opacity: 0.7; }
     .proj-milestone-badge { position: absolute; top: 14px; right: 14px; background: rgba(255,255,255,0.2); border-radius: 20px; padding: 4px 10px; font-size: 11px; font-weight: 700; }
+    @media (max-width: 700px) { .proj-milestone { padding: 16px; } .proj-milestone-badge { position: static; display: inline-block; margin-bottom: 10px; white-space: nowrap; } .proj-milestone-value { font-size: 28px; } }
     .proj-scenario-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 14px; }
     .proj-scenario-card { background: white; border-radius: 10px; padding: 14px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); border-top: 3px solid; text-align: center; cursor: pointer; transition: transform 0.15s, box-shadow 0.15s; }
     .proj-scenario-card:hover { transform: translateY(-1px); box-shadow: 0 3px 8px rgba(0,0,0,0.12); }
@@ -309,6 +322,7 @@
   </style>
 </head>
 <body>
+<div class="ptr" id="ptr" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></svg></div>
 
 <div id="boot-loader">
   <div class="boot-logo">My Portfolio</div>
@@ -826,6 +840,7 @@ async function fetchPrices(){
     } catch(e){ /* keep fallback */ }
   }));
   priceStatus = ok>0 ? 'live' : 'stale';
+  window.__lastPriceFetch = Date.now();
   setRefreshing(false);
   updatePricePill();
 }
@@ -1019,11 +1034,18 @@ document.addEventListener('DOMContentLoaded',()=>{
     t.classList.remove('pressed'); void t.offsetWidth; t.classList.add('pressed');
   }));
 });
-function switchTab(id, el){
+function switchTab(id, el, opts){
+  opts = opts || {};
+  const prevTab = activeTab;
+  /* Back gesture support: record each tab change so Android "back" retraces your steps */
+  if (!opts.fromHistory && prevTab && prevTab !== id) { try { history.pushState({tab:id}, '', location.pathname + location.search); } catch(e){} }
   activeTab = id;
   document.querySelectorAll('.tab-pane').forEach(p=>p.classList.remove('active'));
   document.querySelectorAll('.tabs .tab').forEach(t=>t.classList.remove('active'));
-  document.getElementById('pane-'+id).classList.add('active');
+  const paneEl=document.getElementById('pane-'+id);
+  paneEl.classList.remove('slide-next','slide-prev');
+  if (opts.slide) { void paneEl.offsetWidth; paneEl.classList.add(opts.slide==='next'?'slide-next':'slide-prev'); }
+  paneEl.classList.add('active');
   el.classList.add('active');
   renderActiveTab();
   if (window.matchMedia('(max-width: 640px)').matches) window.scrollTo({top:0, behavior:'smooth'});
@@ -1459,6 +1481,46 @@ document.getElementById('addBtn').onclick=async()=>{
   switchTabByName('manage');
 };
 function switchTabByName(name){ const btn=[...document.querySelectorAll('.tabs .tab')].find(b=>b.getAttribute('onclick').includes(`'${name}'`)); if(btn) switchTab(name, btn); }
+
+/* ---------- Android back gesture + swipe between tabs ---------- */
+const TAB_ORDER=['history','portfolio','accounts','dividends','projection','manage'];
+function tabBtn(name){ return [...document.querySelectorAll('.tabs .tab')].find(b=>b.getAttribute('onclick').includes(`'${name}'`)); }
+try { history.replaceState({tab: activeTab || 'history'}, ''); } catch(e){}
+window.addEventListener('popstate', e=>{
+  const name=(e.state && e.state.tab) || 'history';
+  const b=tabBtn(name); if(!b || name===activeTab) return;
+  const dir = TAB_ORDER.indexOf(name) > TAB_ORDER.indexOf(activeTab) ? 'next' : 'prev';
+  switchTab(name, b, {fromHistory:true, slide:dir});
+});
+(function(){
+  const area=document.querySelector('.content'); if(!area) return;
+  let sx=0, sy=0, st=0, tracking=false;
+  function blocked(el){
+    for(let n=el; n && n!==area; n=n.parentElement){
+      if (n.matches && n.matches('canvas, input, select, textarea, button, .modal-overlay, .no-swipe')) return true;
+      if (n.scrollWidth > n.clientWidth + 2) { const ox=getComputedStyle(n).overflowX; if (ox==='auto'||ox==='scroll') return true; }
+    }
+    return false;
+  }
+  area.addEventListener('touchstart', e=>{
+    if (e.touches.length!==1) { tracking=false; return; }
+    const t=e.touches[0];
+    // leave the screen edges to Android's own back gesture
+    if (t.clientX < 24 || t.clientX > window.innerWidth - 24 || blocked(e.target)) { tracking=false; return; }
+    sx=t.clientX; sy=t.clientY; st=Date.now(); tracking=true;
+  }, {passive:true});
+  area.addEventListener('touchend', e=>{
+    if (!tracking) return; tracking=false;
+    const t=e.changedTouches[0], dx=t.clientX-sx, dy=t.clientY-sy;
+    if (Date.now()-st > 700 || Math.abs(dx) < 70 || Math.abs(dx) < Math.abs(dy)*1.8) return;
+    const i=TAB_ORDER.indexOf(activeTab), ni = dx<0 ? i+1 : i-1;
+    if (ni<0 || ni>=TAB_ORDER.length) return;
+    const b=tabBtn(TAB_ORDER[ni]); if(!b) return;
+    if (typeof haptic==='function') haptic(10);
+    switchTab(TAB_ORDER[ni], b, {slide: dx<0 ? 'next' : 'prev'});
+    b.scrollIntoView && b.scrollIntoView({block:'nearest', inline:'nearest'});
+  }, {passive:true});
+})();
 /* Mobile ⋮ menu */
 (function(){
   const btn=document.getElementById('menuBtn'), grp=document.getElementById('actionGroup');
@@ -1467,7 +1529,56 @@ function switchTabByName(name){ const btn=[...document.querySelectorAll('.tabs .
   grp.addEventListener('click', ()=>close());
   document.addEventListener('click', e=>{ if(!grp.contains(e.target)) close(); });
 })();
-document.getElementById('refreshBtn').onclick=async()=>{ await fetchPrices(); renderAll(); toast(priceStatus==='live'?'Prices updated':'Live prices unavailable'); };
+let __refreshing=false;
+async function refreshPrices(opts){
+  opts=opts||{};
+  if(__refreshing) return; __refreshing=true;
+  try { await fetchPrices(); renderAll(); if(!opts.quiet || priceStatus==='live') toast(priceStatus==='live'?'Prices updated':'Live prices unavailable'); }
+  finally { __refreshing=false; }
+}
+document.getElementById('refreshBtn').onclick=()=>refreshPrices();
+
+/* Auto-refresh prices when you come back to the app after 5+ minutes away */
+document.addEventListener('visibilitychange',()=>{
+  if (document.visibilityState!=='visible') return;
+  const last=window.__lastPriceFetch||0;
+  if (Date.now()-last > 5*60*1000) refreshPrices({quiet:true});
+});
+
+/* Pull down from the top of the page to refresh prices */
+(function(){
+  const ptr=document.getElementById('ptr'); if(!ptr) return;
+  const svg=ptr.querySelector('svg'); const TRIGGER=80;
+  let sy=0, sx=0, pulling=false, dist=0;
+  const anyModalOpen=()=>!!document.querySelector('.modal-overlay.open, .modal-overlay.show, .modal-overlay[style*="flex"]');
+  document.addEventListener('touchstart',e=>{
+    if (e.touches.length!==1 || window.scrollY>0 || __refreshing || anyModalOpen()) { pulling=false; return; }
+    if (e.target.closest && e.target.closest('input, select, textarea, .modal-overlay')) { pulling=false; return; }
+    sy=e.touches[0].clientY; sx=e.touches[0].clientX; pulling=true; dist=0;
+    ptr.classList.remove('release','spinning','ready');
+  },{passive:true});
+  document.addEventListener('touchmove',e=>{
+    if (!pulling) return;
+    const dy=e.touches[0].clientY-sy, dx=e.touches[0].clientX-sx;
+    if (window.scrollY>0 || dy<=0 || Math.abs(dx)>dy) { dist=0; ptr.style.opacity=0; ptr.style.transform='translateY(-60px)'; return; }
+    dist=Math.min(dy*0.5, 120);
+    ptr.style.opacity=Math.min(dist/TRIGGER,1);
+    ptr.style.transform=`translateY(${dist-50}px)`;
+    svg.style.transform=`rotate(${dist*3}deg)`;
+    const ready=dist>=TRIGGER*0.75;
+    if (ready && !ptr.classList.contains('ready') && typeof haptic==='function') haptic(10);
+    ptr.classList.toggle('ready',ready);
+  },{passive:true});
+  document.addEventListener('touchend',async()=>{
+    if (!pulling) return; pulling=false;
+    const go=ptr.classList.contains('ready');
+    ptr.style.opacity=''; ptr.style.transform=''; svg.style.transform='';
+    ptr.classList.remove('ready');
+    if (!go){ ptr.classList.add('release'); return; }
+    ptr.classList.add('spinning');
+    try { await refreshPrices(); } finally { ptr.classList.remove('spinning'); ptr.classList.add('release'); }
+  },{passive:true});
+})();
 
 /* ============================================================
    BOOT
