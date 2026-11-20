@@ -278,9 +278,43 @@
       /* Avoid browser zoom when tapping inputs */
       .field input, .field select, .edit-row input, .modal input { font-size: 16px; }
     }
+
+    /* ===== Boot loader ===== */
+    #boot-loader {
+      position: fixed; inset: 0; z-index: 999;
+      background: #0f172a;
+      display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 28px;
+      transition: opacity .4s ease;
+    }
+    #boot-loader.done { opacity: 0; pointer-events: none; }
+    .boot-logo {
+      font-size: 13px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase;
+      color: rgba(255,255,255,.5);
+    }
+    .boot-total {
+      font-size: 42px; font-weight: 800; color: #fff; letter-spacing: -1.5px; min-height: 52px;
+    }
+    .boot-bar-wrap {
+      width: 180px; height: 3px; background: rgba(255,255,255,.1); border-radius: 999px; overflow: hidden;
+    }
+    .boot-bar {
+      height: 100%; width: 30%; background: #60a5fa; border-radius: 999px;
+      animation: bootSlide 1.4s ease-in-out infinite;
+    }
+    @keyframes bootSlide {
+      0%   { transform: translateX(-100%); width: 40%; }
+      50%  { width: 60%; }
+      100% { transform: translateX(350%); width: 40%; }
+    }
   </style>
 </head>
 <body>
+
+<div id="boot-loader">
+  <div class="boot-logo">My Portfolio</div>
+  <div class="boot-total" id="bootTotal">$—</div>
+  <div class="boot-bar-wrap"><div class="boot-bar"></div></div>
+</div>
 
 <div class="header">
   <div class="header-top">
@@ -1450,6 +1484,11 @@ async function boot(){
   }
   await fetchPrices();
   renderAll();
+  // Update loader total then fade out
+  const bl = document.getElementById('boot-loader');
+  const bt = document.getElementById('bootTotal');
+  if (bt && typeof PORTFOLIO_TOTAL === 'number') bt.textContent = '$' + PORTFOLIO_TOTAL.toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2});
+  setTimeout(() => { if (bl) bl.classList.add('done'); }, 120);
   updateHistDisclaimer();
   loadRealHistory(false); // runs in the background; charts refresh when data arrives
 }
