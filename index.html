@@ -1580,24 +1580,28 @@ document.addEventListener('visibilitychange',()=>{
    BOOT
    ============================================================ */
 async function boot(){
-  loadConfig();
-  updatePricePill();
-  if (initSupabase()) await refreshSession();
-  await loadHoldings();
-  // First run with no data and no cloud: offer local import automatically
-  if (MODE!=='cloud' && (!HOLDINGS || HOLDINGS.length===0)){
-    const local=loadLocalHoldings();
-    if (local===null){ await seedDefaults(); } // seed the known starting portfolio once
-  }
-  await fetchPrices();
-  renderAll();
-  // Update loader total then fade out
   const bl = document.getElementById('boot-loader');
-  const bt = document.getElementById('bootTotal');
-  if (bt && typeof PORTFOLIO_TOTAL === 'number') bt.textContent = '$' + PORTFOLIO_TOTAL.toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2});
-  setTimeout(() => { if (bl) bl.classList.add('done'); }, 120);
-  updateHistDisclaimer();
-  loadRealHistory(false); // runs in the background; charts refresh when data arrives
+  const dismissLoader = () => { if (bl) bl.classList.add('done'); };
+  try {
+    loadConfig();
+    updatePricePill();
+    if (initSupabase()) await refreshSession();
+    await loadHoldings();
+    if (MODE!=='cloud' && (!HOLDINGS || HOLDINGS.length===0)){
+      const local=loadLocalHoldings();
+      if (local===null){ await seedDefaults(); }
+    }
+    await fetchPrices();
+    renderAll();
+    const bt = document.getElementById('bootTotal');
+    if (bt && typeof PORTFOLIO_TOTAL === 'number') bt.textContent = '$' + PORTFOLIO_TOTAL.toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2});
+    setTimeout(dismissLoader, 120);
+    updateHistDisclaimer();
+    loadRealHistory(false);
+  } catch(e) {
+    console.error('Boot error:', e);
+    dismissLoader();
+  }
 }
 boot();
 </script>
