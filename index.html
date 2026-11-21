@@ -168,21 +168,19 @@
     .btn.ghost:hover { background: #e5e7eb; }
     .btn.danger { background: #fee2e2; color: #dc2626; }
     .btn.danger:hover { background: #fecaca; }
-    .edit-row { display: grid; grid-template-columns: 54px 1fr 90px auto auto; gap: 8px; align-items: center; padding: 9px 0; border-bottom: 1px solid #f3f4f6; font-size: 13px; }
+    .edit-row { display: flex; align-items: center; gap: 8px; padding: 9px 0; border-bottom: 1px solid #f3f4f6; font-size: 13px; }
     .edit-row:last-child { border-bottom: none; }
-    .edit-row .sym { font-weight: 700; width: 62px; flex-shrink: 0; }
-    .edit-row .sym small { display: block; font-size: 10px; font-weight: 500; color: #9ca3af; }
-    .edit-row input { width: 92px; flex-shrink: 0; padding: 7px 8px; -moz-appearance: textfield; border: 1.5px solid #e5e7eb; border-radius: 8px; font-size: 13px; }
+    .edit-row .er-sym { font-weight: 700; flex-shrink: 0; width: 52px; overflow: hidden; text-overflow: ellipsis; }
+    .edit-row input { width: 80px; flex-shrink: 0; padding: 7px 8px; -moz-appearance: textfield; border: 1.5px solid #e5e7eb; border-radius: 8px; font-size: 13px; }
     .edit-row input::-webkit-outer-spin-button, .edit-row input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
     .edit-row input:focus { outline: none; border-color: #2563eb; }
-    .edit-row .px { flex: 1; min-width: 0; font-size: 12px; color: #6b7280; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .icon-act { width: 38px; height: 38px; flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center; border-radius: 10px; border: none; cursor: pointer; background: transparent; transition: background .15s, color .15s; }
-    .icon-act svg { width: 18px; height: 18px; }
+    .edit-row .er-price { flex: 1; min-width: 0; font-size: 12px; color: #6b7280; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .icon-act { width: 36px; height: 36px; flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center; border-radius: 10px; border: none; cursor: pointer; background: transparent; transition: background .15s, color .15s; }
+    .icon-act svg { width: 17px; height: 17px; }
     .icon-act.save { color: #d1d5db; background: #f9fafb; cursor: default; }
     .icon-act.save.dirty { color: #fff; background: #2563eb; cursor: pointer; }
     .icon-act.del { color: #9ca3af; }
     .icon-act.del:hover, .icon-act.del:active { color: #dc2626; background: #fee2e2; }
-    @media (max-width: 420px) { .edit-row { gap: 6px; } .edit-row .sym { width: 56px; } .edit-row input { width: 86px; padding: 7px 6px; } .icon-act { width: 34px; height: 34px; } }
 
     /* Modal */
     .modal-overlay { position: fixed; inset: 0; background: rgba(15,23,42,0.55); display: none; align-items: center; justify-content: center; padding: 16px; z-index: 50; }
@@ -638,26 +636,26 @@ const LAST_KNOWN = {
 
 // Starting holdings (offered as a one-click import). is_manual = not a live-traded ticker (e.g. 401k fund).
 const DEFAULT_HOLDINGS = [
-  {symbol:'FBTC', account:'E*Trade Brokerage', shares:240},
+  {symbol:'FBTC', account:'E*Trade Roth IRA', shares:240},
   {symbol:'FBTC', account:'E*Trade Roth IRA', shares:273},
   {symbol:'FBTC', account:'Fidelity Rollover IRA', shares:70},
-  {symbol:'BOTZ', account:'E*Trade Brokerage', shares:10},
+  {symbol:'BOTZ', account:'E*Trade Roth IRA', shares:10},
   {symbol:'BOTZ', account:'Fidelity Rollover IRA', shares:30},
-  {symbol:'GLD', account:'E*Trade Brokerage', shares:40},
+  {symbol:'GLD', account:'E*Trade Roth IRA', shares:40},
   {symbol:'GLD', account:'E*Trade Roth IRA', shares:13},
   {symbol:'GLD', account:'Fidelity Rollover IRA', shares:28},
-  {symbol:'VDE', account:'E*Trade Brokerage', shares:3},
-  {symbol:'VOO', account:'E*Trade Brokerage', shares:63},
+  {symbol:'VDE', account:'E*Trade Roth IRA', shares:3},
+  {symbol:'VOO', account:'E*Trade Roth IRA', shares:63},
   {symbol:'VOO', account:'E*Trade Roth IRA', shares:10},
   {symbol:'VOO', account:'Fidelity Rollover IRA', shares:23.319},
-  {symbol:'SPY', account:'E*Trade Brokerage', shares:38},
-  {symbol:'MGK', account:'E*Trade Brokerage', shares:95},
+  {symbol:'SPY', account:'E*Trade Roth IRA', shares:38},
+  {symbol:'MGK', account:'E*Trade Roth IRA', shares:95},
   {symbol:'MGK', account:'Fidelity Rollover IRA', shares:55},
-  {symbol:'MAGS', account:'E*Trade Brokerage', shares:29},
-  {symbol:'VXUS', account:'E*Trade Brokerage', shares:184},
+  {symbol:'MAGS', account:'E*Trade Roth IRA', shares:29},
+  {symbol:'VXUS', account:'E*Trade Roth IRA', shares:184},
   {symbol:'VXUS', account:'E*Trade Roth IRA', shares:44},
   {symbol:'VXUS', account:'Fidelity Rollover IRA', shares:129.777},
-  {symbol:'STRC', account:'E*Trade Brokerage', shares:134},
+  {symbol:'STRC', account:'E*Trade Roth IRA', shares:134},
   {symbol:'VNQ', account:'Fidelity Rollover IRA', shares:10},
   {symbol:'VTR2060', account:'Fidelity Roth 401k', shares:5254.513, is_manual:true, manual_price:27.28},
 ];
@@ -1341,9 +1339,9 @@ function buildManageTab(){
       }
       const color=metaFor(h.symbol).color;
       const row=document.createElement('div'); row.className='edit-row';
-      row.innerHTML=`<div style="font-weight:700;color:${color}">${h.symbol}</div>`+
+      row.innerHTML=`<div class="er-sym" style="color:${color}">${h.symbol}</div>`+
         `<input type="number" step="any" min="0" value="${h.shares}">`+
-        `<div style="font-size:12px;color:#6b7280;">${h.is_manual?'@ '+fmt(h.manual_price||0):fmt((priceFor(h.symbol).c||0))}</div>`+
+        `<div class="er-price">${h.is_manual?'@ '+fmt(h.manual_price||0):fmt((priceFor(h.symbol).c||0))}</div>`+
         `<button class="icon-act save save-btn" title="Save"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></button>`+
         `<button class="icon-act del del-btn" title="Remove"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg></button>`;
       const input=row.querySelector('input');
