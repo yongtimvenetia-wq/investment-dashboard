@@ -26,6 +26,8 @@
     .header { background: #1e293b; color: white; padding: 18px 24px 14px; }
     .header-top { display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 8px; }
     .total-value { font-size: 32px; font-weight: 800; letter-spacing: -1px; margin-top: 4px; }
+    @keyframes shimmer { 0%,100%{opacity:.4} 50%{opacity:1} }
+    .shimmer { animation: shimmer 1.2s ease-in-out infinite; color: rgba(255,255,255,.35) !important; }
     .day-change { font-size: 13px; margin-top: 2px; }
     .day-change.neg { color: #f87171; }
     .day-change.pos { color: #4ade80; }
@@ -300,8 +302,8 @@
   <div class="header-top">
     <div>
       <div style="font-size:13px;opacity:.6;font-weight:600;letter-spacing:.3px;margin-bottom:2px;">MY PORTFOLIO</div>
-      <div class="total-value" id="headerTotal">$—</div>
-      <div class="day-change" id="headerDayChange"></div>
+      <div class="total-value shimmer" id="headerTotal">$—</div>
+      <div class="day-change shimmer" id="headerDayChange">Loading…</div>
     </div>
     <div class="header-actions">
       <button class="hbtn icon-btn" id="refreshBtn" title="Refresh prices" aria-label="Refresh prices"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:6px"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg><span class="btn-label" id="refreshTxt">Refresh</span></button>
@@ -1561,6 +1563,8 @@ async function boot(){
   }
   await fetchPrices();
   renderAll();
+  document.getElementById('headerTotal').classList.remove('shimmer');
+  document.getElementById('headerDayChange').classList.remove('shimmer');
   updateHistDisclaimer();
   loadRealHistory(false);
 }
