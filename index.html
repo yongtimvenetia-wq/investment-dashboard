@@ -811,6 +811,7 @@ async function fetchPrices(){
 function setRefreshing(on){ const b = document.getElementById('refreshBtn'); document.getElementById('refreshTxt').textContent = on ? '...' : 'Refresh'; b.disabled = on; }
 function updatePricePill(){
   const p = document.getElementById('pricePill');
+  if (!p) return;
   if (priceStatus==='live'){ p.className='status-pill live'; p.textContent='PRICES: LIVE'; }
   else { p.className='status-pill stale'; p.textContent = CONFIG.finnhub ? 'PRICES: LAST-KNOWN' : 'PRICES: NO KEY'; }
 }
@@ -848,8 +849,10 @@ function renderHeader(){
   const etfs = heldSymbols().length;
   document.getElementById('metaLine').textContent = `${etfs} holdings · ${accts} account${accts===1?'':'s'}` + (MODE==='cloud'&&user? ' · '+user.email : '');
   const mp = document.getElementById('modePill');
+  if (mp) {
   if (MODE==='cloud'){ mp.className='status-pill cloud'; mp.textContent='SYNCED'; }
   else { mp.className='status-pill local'; mp.textContent='LOCAL'; }
+  }
   document.getElementById('authTxt').textContent = (MODE==='cloud'&&user) ? 'Sign out' : 'Sign in';
   updatePricePill();
 }
